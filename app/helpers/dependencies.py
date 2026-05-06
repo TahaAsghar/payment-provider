@@ -70,13 +70,6 @@ async def idempotency_guard(
 ) -> IdempotencyResult:
     """
     FastAPI dependency that enforces idempotency on POST endpoints.
-
-    Algorithm:
-      1. If no Idempotency-Key header → proceed normally (no guard).
-      2. SELECT FOR UPDATE on the key to acquire a row-level lock.
-      3. If the row exists and is COMPLETED → return the cached response.
-      4. If the row exists but is IN_PROGRESS → raise 409 (concurrent dup).
-      5. If no row → INSERT an IN_PROGRESS record and let the request proceed.
     """
     if idempotency_key is None:
         raise HTTPException(
