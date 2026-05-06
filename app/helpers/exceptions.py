@@ -1,7 +1,7 @@
 import uuid
 from decimal import Decimal
 
-from app.domain.enums import PaymentStatus
+from app.helpers.enums import PaymentStatus
 
 
 class PaymentNotFoundError(Exception):

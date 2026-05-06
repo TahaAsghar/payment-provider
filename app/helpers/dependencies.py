@@ -1,12 +1,3 @@
-"""
-FastAPI dependencies — idempotency interceptor, session injection,
-and service wiring.
-
-The idempotency layer uses a DB-backed log with row-level locking
-(SELECT … FOR UPDATE) to prevent duplicate processing of the same
-request.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -17,18 +8,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.payment_repository import PaymentRepository
-from app.domain.repository_port import PaymentRepositoryInterface
-from app.infrastructure.database import get_async_session
+from app.interface.repository_interface import PaymentRepositoryInterface
+from app.database import get_async_session
 from app.models import IdempotencyLogORM
 from app.services.payment_service import PaymentService
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Session → Repository → Service dependency chain
-# ---------------------------------------------------------------------------
-
 
 async def get_repository(
     session: AsyncSession = Depends(get_async_session),
@@ -41,30 +26,20 @@ async def get_payment_service(
 ) -> PaymentService:
     return PaymentService(repository=repo)
 
-
-# ---------------------------------------------------------------------------
-# Idempotency interceptor
-# ---------------------------------------------------------------------------
-
-
 class IdempotencyResult:
-    """
-    Carries either a cached response (already completed) or a freshly
-    acquired lock row so the endpoint can proceed and mark it done.
-    """
 
     def __init__(
         self,
         *,
-        is_cached: bool,
-        cached_response: Optional[dict[str, Any]] = None,
-        cached_status_code: int = 200,
+        is_duplicate: bool,
+        previous_response: Optional[dict[str, Any]] = None,
+        previous_status_code: int = 200,
         idempotency_key: Optional[str] = None,
         session: Optional[AsyncSession] = None,
     ) -> None:
-        self.is_cached = is_cached
-        self.cached_response = cached_response
-        self.cached_status_code = cached_status_code
+        self.is_duplicate = is_duplicate
+        self.previous_response = previous_response
+        self.previous_status_code = previous_status_code
         self.idempotency_key = idempotency_key
         self.session = session
 
@@ -104,7 +79,10 @@ async def idempotency_guard(
       5. If no row → INSERT an IN_PROGRESS record and let the request proceed.
     """
     if idempotency_key is None:
-        return IdempotencyResult(is_cached=False, session=session)
+        raise HTTPException(
+            status_code=400,
+            detail="Idempotency-Key header is required for this endpoint.",
+        )
 
     endpoint = f"{request.method} {request.url.path}"
 
@@ -122,9 +100,9 @@ async def idempotency_guard(
         if existing.status == "COMPLETED":
             logger.info("Idempotency HIT for key=%s", idempotency_key)
             return IdempotencyResult(
-                is_cached=True,
-                cached_response=existing.response_body,
-                cached_status_code=existing.response_code or 200,
+                is_duplicate=True,
+                previous_response=existing.response_body,
+                previous_status_code=existing.response_code or 200,
             )
         # Still in progress — another request is handling it right now.
         raise HTTPException(
@@ -143,7 +121,7 @@ async def idempotency_guard(
     logger.info("Idempotency MISS — created IN_PROGRESS for key=%s", idempotency_key)
 
     return IdempotencyResult(
-        is_cached=False,
+        is_duplicate=False,
         idempotency_key=idempotency_key,
         session=session,
     )

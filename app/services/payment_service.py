@@ -1,18 +1,10 @@
-"""
-PaymentService — core use-case orchestration.
-
-This service coordinates between domain ports (provider gateway,
-repository) without ever depending on a specific framework or adapter.
-It is the single source of truth for payment lifecycle operations.
-"""
-
 from __future__ import annotations
 
 import logging
 import uuid
 from decimal import Decimal
 
-from app.domain.enums import PaymentStatus, RefundStatus
+from app.helpers.enums import PaymentStatus, RefundStatus
 from app.schemas import (
     CreatePaymentRequest,
     CreateRefundRequest,
@@ -20,10 +12,10 @@ from app.schemas import (
     PaymentDetail,
     RefundDetail,
 )
-from app.domain.provider_port import PaymentProviderInterface
-from app.domain.repository_port import PaymentRepositoryInterface
+from app.interface.provider_interface import PaymentProviderInterface
+from app.interface.repository_interface import PaymentRepositoryInterface
 from app.services.provider_factory import get_provider
-from app.domain.exceptions import (
+from app.helpers.exceptions import (
     PaymentNotFoundError,
     PaymentNotRefundableError,
     RefundAmountExceededError,
@@ -33,22 +25,13 @@ logger = logging.getLogger(__name__)
 
 
 class PaymentService:
-    """
-    Application service that drives the create-payment, get-payment,
-    and refund use-cases.
-    """
 
     def __init__(self, repository: PaymentRepositoryInterface) -> None:
         self._repo = repository
 
 
     async def create_payment(self, request: CreatePaymentRequest) -> PaymentDetail:
-        """
-        1. Persist a PENDING payment row.
-        2. Call the external provider.
-        3. Update the row with the provider's reference & status.
-        """
-        # 1. Persist initial record
+
         payment = await self._repo.create_payment(
             provider=request.provider,
             amount=request.amount,
@@ -58,7 +41,6 @@ class PaymentService:
         )
         logger.info("Created PENDING payment %s", payment.id)
 
-        # 2. Call provider
         provider: PaymentProviderInterface = get_provider(request.provider)
         try:
             result: NormalizedPaymentResponse = await provider.create_payment(
@@ -75,7 +57,6 @@ class PaymentService:
             )
             raise
 
-        # 3. Update record with provider response
         payment = await self._repo.update_payment_status(
             payment.id,
             status=result.status,
@@ -102,12 +83,8 @@ class PaymentService:
         payment_id: uuid.UUID,
         request: CreateRefundRequest,
     ) -> RefundDetail:
-        """
-        1. Validate that the payment exists and is refundable.
-        2. Call the provider's refund endpoint.
-        3. Persist the refund record and update the payment status.
-        """
-        payment = await self._repo.get_payment(payment_id)
+
+        payment = await self._repo.get_payment_for_update(payment_id)
         if payment is None:
             raise PaymentNotFoundError(payment_id)
 
@@ -118,9 +95,13 @@ class PaymentService:
         ):
             raise PaymentNotRefundableError(payment_id, payment.status)
 
-        if request.amount > payment.amount:
+        existing_refunds = await self._repo.get_refunds_for_payment(payment_id)
+        total_refunded = sum(r.amount for r in existing_refunds)
+        available = payment.amount - total_refunded
+
+        if request.amount > available:
             raise RefundAmountExceededError(
-                payment_id, request.amount, payment.amount
+                payment_id, request.amount, available
             )
 
         provider = get_provider(payment.provider)
@@ -141,7 +122,7 @@ class PaymentService:
 
         new_status = (
             PaymentStatus.REFUNDED
-            if request.amount == payment.amount
+            if (total_refunded + request.amount) >= payment.amount
             else PaymentStatus.PARTIALLY_REFUNDED
         )
         await self._repo.update_payment_status(payment_id, status=new_status)

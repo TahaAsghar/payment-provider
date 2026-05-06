@@ -1,18 +1,10 @@
-"""
-Provider registry — holds the decorator and the global registry dict.
-
-This module is deliberately kept separate from provider_factory.py to
-avoid circular imports: adapters import the decorator from here, and
-the factory imports the registry dict from here + triggers adapter discovery.
-"""
-
 from __future__ import annotations
 
 import logging
 from typing import Callable
 
-from app.domain.enums import ProviderName
-from app.domain.provider_port import PaymentProviderInterface
+from app.helpers.enums import ProviderName
+from app.interface.provider_interface import PaymentProviderInterface
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +17,6 @@ def register_provider(
 ) -> Callable[[type[PaymentProviderInterface]], type[PaymentProviderInterface]]:
     """
     Class decorator that registers a provider adapter in the global registry.
-
-    Usage::
-
-        @register_provider(ProviderName.PROVIDER_A)
-        class ProviderAClient(PaymentProviderInterface):
-            ...
     """
 
     def decorator(
@@ -49,5 +35,4 @@ def register_provider(
 
 
 def get_registry() -> dict[ProviderName, type[PaymentProviderInterface]]:
-    """Return a read-only view of the current registry (for the factory)."""
     return _PROVIDER_REGISTRY

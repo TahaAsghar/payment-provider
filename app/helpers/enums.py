@@ -1,16 +1,7 @@
-"""
-Canonical status enums used throughout the domain layer.
-
-These enums standardize the heterogeneous status values returned by
-different external payment providers into a single vocabulary that the
-rest of the application can depend on.
-"""
-
 from enum import Enum
 
 
 class PaymentStatus(str, Enum):
-    """Normalized payment lifecycle status."""
 
     PENDING = "PENDING"
     SUCCESS = "SUCCESS"
@@ -21,7 +12,6 @@ class PaymentStatus(str, Enum):
 
 
 class RefundStatus(str, Enum):
-    """Normalized refund lifecycle status."""
 
     PENDING = "PENDING"
     SUCCESS = "SUCCESS"
@@ -29,7 +19,6 @@ class RefundStatus(str, Enum):
 
 
 class ProviderName(str, Enum):
-    """Supported payment provider identifiers."""
 
     PROVIDER_A = "provider_a"
     PROVIDER_B = "provider_b"

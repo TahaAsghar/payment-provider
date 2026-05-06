@@ -1,11 +1,3 @@
-"""
-Domain models — Pydantic schemas that live in the core domain.
-
-Pydantic is treated as a *domain-level* dependency (data modelling library),
-NOT as a web-framework dependency.  The core domain never imports FastAPI,
-SQLAlchemy, or HTTP client libraries.
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -15,12 +7,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
-from app.domain.enums import PaymentStatus, ProviderName, RefundStatus
-
-
-# ---------------------------------------------------------------------------
-# Request models
-# ---------------------------------------------------------------------------
+from app.helpers.enums import PaymentStatus, ProviderName, RefundStatus
 
 
 class CreatePaymentRequest(BaseModel):
@@ -37,12 +24,6 @@ class CreateRefundRequest(BaseModel):
 
     amount: Decimal = Field(..., gt=0, description="Refund amount")
     reason: str = Field(..., min_length=1, max_length=500)
-
-
-# ---------------------------------------------------------------------------
-# Normalized response returned by every provider adapter
-# ---------------------------------------------------------------------------
-
 
 class NormalizedPaymentResponse(BaseModel):
     """
@@ -69,12 +50,6 @@ class NormalizedRefundResponse(BaseModel):
     status: RefundStatus
     refunded_amount: Decimal
     raw_response: dict[str, Any] = Field(default_factory=dict)
-
-
-# ---------------------------------------------------------------------------
-# Read models (returned to callers)
-# ---------------------------------------------------------------------------
-
 
 class PaymentDetail(BaseModel):
     """Full payment record returned on GET /payments/{id}."""

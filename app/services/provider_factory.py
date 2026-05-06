@@ -2,35 +2,21 @@ from __future__ import annotations
 
 import importlib
 import logging
-import os
 
-from app.domain.enums import ProviderName
-from app.domain.provider_port import PaymentProviderInterface
+from app.helpers.enums import ProviderName
+from app.interface.provider_interface import PaymentProviderInterface
 from app.services.provider_registry import get_registry
 
 logger = logging.getLogger(__name__)
 
 
 def _ensure_adapter_loaded(name: ProviderName) -> None:
-    """
-    Lazily import the adapter module for ``name`` if it hasn't been
-    imported yet.
 
-    Convention: ``ProviderName.PROVIDER_A`` ("provider_a")
-                → ``app.adapters.provider_a_client``
-
-    The import triggers the ``@register_provider`` decorator inside
-    that module, which populates the registry.
-    """
     registry = get_registry()
     if name in registry:
-        return  # already loaded
+        return
 
-    if name == ProviderName.PROVIDER_A:
-        module_name = "app.adapters.providerA_adapter"
-    else:
-        module_name = f"app.adapters.{name.value}_adapter"
-        
+    module_name = f"app.adapters.{name.value}"
     try:
         importlib.import_module(module_name)
         logger.info("Lazy-loaded adapter module: %s", module_name)

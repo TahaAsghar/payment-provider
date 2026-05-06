@@ -1,24 +1,29 @@
-"""
-FastAPI application entrypoint.
-
-Configures logging, mounts routers, and exposes lifecycle hooks for
-managing the async database engine.
-"""
-
 from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from app.api.router import router as payments_router
-from app.infrastructure.database import engine
+from app.config import settings
+from app.api.router import router as payments_router, limiter
+from app.database import engine
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
+sentry_sdk.init(
+    dsn=settings.SENTRY_KEY,
+    integrations=[
+        FastApiIntegration(),
+        SqlalchemyIntegration(),
+    ],
+    traces_sample_rate=1.0,
+    send_default_pii=False,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,23 +32,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-# ---------------------------------------------------------------------------
-# Lifespan (startup / shutdown)
-# ---------------------------------------------------------------------------
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Payment Service starting up ...")
     yield
     logger.info("Payment Service shutting down ...")
     await engine.dispose()
-
-
-# ---------------------------------------------------------------------------
-# Application
-# ---------------------------------------------------------------------------
 
 app = FastAPI(
     title="Unified Payment Provider API",
@@ -57,7 +51,6 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS — adjust for production
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -66,8 +59,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount routers
 app.include_router(payments_router, prefix="/api/v1")
+
+app.state.limiter = limiter
+
+@app.exception_handler(429)
+async def rate_limit_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Please try again later."},
+    )
 
 
 @app.get("/health", tags=["Health"])

@@ -4,10 +4,10 @@ import logging
 import uuid
 from decimal import Decimal
 
-from app.domain.enums import PaymentStatus, RefundStatus
+from app.helpers.enums import PaymentStatus, RefundStatus
 from app.schemas import NormalizedPaymentResponse, NormalizedRefundResponse
-from app.domain.enums import ProviderName
-from app.domain.provider_port import PaymentProviderInterface
+from app.helpers.enums import ProviderName
+from app.interface.provider_interface import PaymentProviderInterface
 from app.services.provider_registry import register_provider
 
 logger = logging.getLogger(__name__)

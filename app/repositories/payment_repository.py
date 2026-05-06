@@ -8,9 +8,9 @@ from typing import Any, Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.enums import PaymentStatus, ProviderName, RefundStatus
+from app.helpers.enums import PaymentStatus, ProviderName, RefundStatus
 from app.schemas import PaymentDetail, RefundDetail
-from app.domain.repository_port import PaymentRepositoryInterface
+from app.interface.repository_interface import PaymentRepositoryInterface
 from app.models import PaymentORM, RefundORM
 
 
@@ -55,6 +55,18 @@ class PaymentRepository(PaymentRepositoryInterface):
             return None
         return self._to_payment_detail(row)
 
+    async def get_payment_for_update(self, payment_id: uuid.UUID) -> Optional[PaymentDetail]:
+        stmt = (
+            select(PaymentORM)
+            .where(PaymentORM.id == payment_id)
+            .with_for_update()
+        )
+        result = await self._session.execute(stmt)
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        return self._to_payment_detail(row)
+        
     async def update_payment_status(
         self,
         payment_id: uuid.UUID,

@@ -1,13 +1,3 @@
-"""
-SQLAlchemy ORM models — these map to real Postgres tables and are used
-exclusively inside the adapters / infrastructure layers.
-
-Tables:
-  - payments         Core payment records
-  - refunds          Refund records linked to payments
-  - idempotency_log  Idempotency-key tracking with row-level locking
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -26,17 +16,12 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.domain.enums import PaymentStatus, ProviderName, RefundStatus
-from app.infrastructure.database import Base
+from app.helpers.enums import PaymentStatus, ProviderName, RefundStatus
+from app.database import Base
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
-
-
-# ---------------------------------------------------------------------------
-# Payments
-# ---------------------------------------------------------------------------
 
 
 class PaymentORM(Base):
@@ -74,11 +59,6 @@ class PaymentORM(Base):
     )
 
 
-# ---------------------------------------------------------------------------
-# Refunds
-# ---------------------------------------------------------------------------
-
-
 class RefundORM(Base):
     __tablename__ = "refunds"
 
@@ -108,11 +88,6 @@ class RefundORM(Base):
     )
 
     payment: Mapped["PaymentORM"] = relationship(back_populates="refunds")
-
-
-# ---------------------------------------------------------------------------
-# Idempotency Log
-# ---------------------------------------------------------------------------
 
 
 class IdempotencyLogORM(Base):

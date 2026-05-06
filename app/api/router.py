@@ -3,10 +3,13 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
-from app.dependencies import (
+from app.config import settings
+from app.helpers.dependencies import (
     IdempotencyResult,
     get_payment_service,
     idempotency_guard,
@@ -18,7 +21,7 @@ from app.schemas import (
     RefundDetail,
 )
 from app.services.payment_service import PaymentService
-from app.domain.exceptions import (
+from app.helpers.exceptions import (
     PaymentNotFoundError,
     PaymentNotRefundableError,
     RefundAmountExceededError,
@@ -26,6 +29,7 @@ from app.domain.exceptions import (
 
 logger = logging.getLogger(__name__)
 
+limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/payments", tags=["Payments"])
 
 
@@ -37,16 +41,17 @@ router = APIRouter(prefix="/payments", tags=["Payments"])
     summary="Create a new payment",
     description="Initiate a payment through the specified provider.",
 )
+@limiter.limit(settings.RATE_LIMIT_CREATE_PAYMENT)
 async def create_payment(
+    request: Request,
     body: CreatePaymentRequest,
     service: PaymentService = Depends(get_payment_service),
     idem: IdempotencyResult = Depends(idempotency_guard),
 ) -> JSONResponse | PaymentDetail:
-    # Short-circuit on idempotent duplicate
-    if idem.is_cached:
+    if idem.is_duplicate:
         return JSONResponse(
-            content=idem.cached_response,
-            status_code=idem.cached_status_code,
+            content=idem.previous_response,
+            status_code=idem.previous_status_code,
         )
 
     try:
@@ -59,7 +64,6 @@ async def create_payment(
 
     response_body = payment.model_dump(mode="json")
 
-    # Mark idempotency entry as completed
     await idem.mark_completed(201, response_body)
 
     return JSONResponse(content=response_body, status_code=201)
@@ -70,7 +74,9 @@ async def create_payment(
     response_model=PaymentDetail,
     summary="Retrieve a payment by ID",
 )
+@limiter.limit(settings.RATE_LIMIT_GET_PAYMENT)
 async def get_payment(
+    request: Request,
     payment_id: uuid.UUID,
     service: PaymentService = Depends(get_payment_service),
 ) -> PaymentDetail:
@@ -87,17 +93,18 @@ async def get_payment(
     summary="Refund a payment",
     description="Initiate a full or partial refund for an existing payment.",
 )
+@limiter.limit(settings.RATE_LIMIT_REFUND)
 async def refund_payment(
+    request: Request,
     payment_id: uuid.UUID,
     body: CreateRefundRequest,
     service: PaymentService = Depends(get_payment_service),
     idem: IdempotencyResult = Depends(idempotency_guard),
 ) -> JSONResponse | RefundDetail:
-    # Short-circuit on idempotent duplicate
-    if idem.is_cached:
+    if idem.is_duplicate:
         return JSONResponse(
-            content=idem.cached_response,
-            status_code=idem.cached_status_code,
+            content=idem.previous_response,
+            status_code=idem.previous_status_code,
         )
 
     try:

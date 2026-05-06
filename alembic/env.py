@@ -17,7 +17,7 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Import Base so Alembic auto-generates from our ORM models.
-from app.infrastructure.database import Base, DATABASE_URL
+from app.database import Base, DATABASE_URL
 from app.models import (  # noqa: F401 — ensure models are registered
     IdempotencyLogORM,
     PaymentORM,

@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from decimal import Decimal
 from typing import Any, Optional
 
-from app.domain.enums import PaymentStatus, ProviderName, RefundStatus
+from app.helpers.enums import PaymentStatus, ProviderName, RefundStatus
 from app.schemas import (
     PaymentDetail,
     RefundDetail,
@@ -34,6 +34,10 @@ class PaymentRepositoryInterface(ABC):
 
     @abstractmethod
     async def get_payment(self, payment_id: uuid.UUID) -> Optional[PaymentDetail]:
+        ...
+
+    @abstractmethod
+    async def get_payment_for_update(self, payment_id: uuid.UUID) -> Optional[PaymentDetail]:
         ...
 
     @abstractmethod
